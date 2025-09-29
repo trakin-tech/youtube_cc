@@ -47,12 +47,12 @@ class YouTubeProcessor:
             )
     
     def download_audio(self, url, session_id):
-        """Download audio from YouTube URL using yt-dlp"""
+        """Download audio from YouTube URL using yt-dlp with cookies support"""
         try:
             progress_data[session_id]['status'] = 'Downloading audio...'
             progress_data[session_id]['progress'] = 10
             
-            # Configure yt-dlp options with different extractors
+            # Configure yt-dlp options with multiple fallback strategies
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'extractaudio': True,
@@ -60,46 +60,127 @@ class YouTubeProcessor:
                 'outtmpl': '%(title)s.%(ext)s',
                 'quiet': True,
                 'no_warnings': True,
-                # Use mobile web client to avoid bot detection
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': ['mweb', 'web'],
-                        'player_skip': ['configs'],
-                    }
-                }
             }
             
-            # Get video info first
-            with yt_dlp.YoutubeDL({'quiet': True, 'extractor_args': ydl_opts['extractor_args']}) as ydl:
+            # Strategy 1: Try with cookies if available
+            youtube_cookies = os.getenv('YOUTUBE_COOKIES')
+            if youtube_cookies:
+                # Create temporary cookies file
+                cookies_file = 'temp_cookies.txt'
+                with open(cookies_file, 'w') as f:
+                    f.write(youtube_cookies)
+                ydl_opts['cookiefile'] = cookies_file
+                
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                        title = info.get('title', 'Unknown')
+                        safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                        
+                        progress_data[session_id]['video_title'] = title
+                        progress_data[session_id]['progress'] = 30
+                        
+                        ydl_opts['outtmpl'] = f'{safe_title}.%(ext)s'
+                        ydl.download([url])
+                        
+                        # Clean up cookies file
+                        if os.path.exists(cookies_file):
+                            os.remove(cookies_file)
+                        
+                        # Find downloaded file
+                        audio_file = f"{safe_title}.m4a"
+                        if not os.path.exists(audio_file):
+                            for ext in ['.webm', '.mp4', '.opus']:
+                                test_file = f"{safe_title}{ext}"
+                                if os.path.exists(test_file):
+                                    audio_file = test_file
+                                    break
+                        
+                        progress_data[session_id]['progress'] = 50
+                        progress_data[session_id]['audio_file'] = audio_file
+                        return audio_file, safe_title
+                        
+                except Exception as cookie_error:
+                    # Clean up cookies file on error
+                    if os.path.exists(cookies_file):
+                        os.remove(cookies_file)
+                    print(f"Cookie method failed: {cookie_error}")
+            
+            # Strategy 2: Try Android client (often bypasses cookies)
+            ydl_opts.update({
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['android', 'android_music'],
+                        'player_skip': ['webpage', 'configs'],
+                    }
+                },
+                'http_headers': {
+                    'User-Agent': 'com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip'
+                }
+            })
+            
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    title = info.get('title', 'Unknown')
+                    safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                    
+                    progress_data[session_id]['video_title'] = title
+                    progress_data[session_id]['progress'] = 30
+                    
+                    ydl_opts['outtmpl'] = f'{safe_title}.%(ext)s'
+                    ydl.download([url])
+                    
+                    # Find downloaded file
+                    audio_file = f"{safe_title}.m4a"
+                    if not os.path.exists(audio_file):
+                        for ext in ['.webm', '.mp4', '.opus']:
+                            test_file = f"{safe_title}{ext}"
+                            if os.path.exists(test_file):
+                                audio_file = test_file
+                                break
+                    
+                    progress_data[session_id]['progress'] = 50
+                    progress_data[session_id]['audio_file'] = audio_file
+                    return audio_file, safe_title
+                    
+            except Exception as android_error:
+                print(f"Android client failed: {android_error}")
+            
+            # Strategy 3: Try iOS client as final fallback
+            ydl_opts['extractor_args'] = {
+                'youtube': {
+                    'player_client': ['ios', 'ios_music'],
+                    'player_skip': ['webpage', 'configs'],
+                }
+            }
+            ydl_opts['http_headers'] = {
+                'User-Agent': 'com.google.ios.youtube/17.31.4 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)'
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 title = info.get('title', 'Unknown')
-                
-                # Clean title for filename
                 safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
                 
                 progress_data[session_id]['video_title'] = title
                 progress_data[session_id]['progress'] = 30
-            
-            # Download audio with cleaned filename
-            ydl_opts['outtmpl'] = f'{safe_title}.%(ext)s'
-            
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                
+                ydl_opts['outtmpl'] = f'{safe_title}.%(ext)s'
                 ydl.download([url])
-            
-            # Find the downloaded file
-            audio_file = f"{safe_title}.m4a"
-            if not os.path.exists(audio_file):
-                # Try other common extensions
-                for ext in ['.webm', '.mp4', '.opus']:
-                    test_file = f"{safe_title}{ext}"
-                    if os.path.exists(test_file):
-                        audio_file = test_file
-                        break
-            
-            progress_data[session_id]['progress'] = 50
-            progress_data[session_id]['audio_file'] = audio_file
-            
-            return audio_file, safe_title
+                
+                # Find downloaded file
+                audio_file = f"{safe_title}.m4a"
+                if not os.path.exists(audio_file):
+                    for ext in ['.webm', '.mp4', '.opus']:
+                        test_file = f"{safe_title}{ext}"
+                        if os.path.exists(test_file):
+                            audio_file = test_file
+                            break
+                
+                progress_data[session_id]['progress'] = 50
+                progress_data[session_id]['audio_file'] = audio_file
+                return audio_file, safe_title
             
         except Exception as e:
             progress_data[session_id]['error'] = f"Download error: {str(e)}"
