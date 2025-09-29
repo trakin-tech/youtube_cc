@@ -1,5 +1,5 @@
 Flask==2.3.3
-pytubefix==6.9.2
+pytubefix
 openai
 google-genai
 python-dotenv==1.0.0
