@@ -52,18 +52,25 @@ class YouTubeProcessor:
             progress_data[session_id]['status'] = 'Downloading audio...'
             progress_data[session_id]['progress'] = 10
             
-            # Configure yt-dlp options
+            # Configure yt-dlp options with different extractors
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'extractaudio': True,
                 'audioformat': 'm4a',
                 'outtmpl': '%(title)s.%(ext)s',
-                'quiet': True,  # Suppress output
+                'quiet': True,
                 'no_warnings': True,
+                # Use mobile web client to avoid bot detection
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['mweb', 'web'],
+                        'player_skip': ['configs'],
+                    }
+                }
             }
             
             # Get video info first
-            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+            with yt_dlp.YoutubeDL({'quiet': True, 'extractor_args': ydl_opts['extractor_args']}) as ydl:
                 info = ydl.extract_info(url, download=False)
                 title = info.get('title', 'Unknown')
                 
