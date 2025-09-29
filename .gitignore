@@ -98,4 +98,5 @@ coverage.xml
 # mypy
 .mypy_cache/
 .dmypy.json
-dmypy.json
+dmypy.jsoncookies.txt
+temp_cookies.txt
