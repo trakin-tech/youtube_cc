@@ -53,7 +53,7 @@ class YouTubeProcessor:
             progress_data[session_id]['progress'] = 10
             
             # Use WEB client with PoToken support to avoid bot detection
-            yt = YouTube(url, client='WEB', use_po_token=True, on_progress_callback=on_progress)
+            yt = YouTube(url, client='ANDROID', on_progress_callback=on_progress)
             title = yt.title
             
             # Clean title for filename
