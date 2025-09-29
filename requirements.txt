@@ -3,3 +3,4 @@ yt-dlp
 openai
 google-genai
 python-dotenv==1.0.0
+requests
