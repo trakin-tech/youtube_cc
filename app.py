@@ -10,8 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import functions from existing scripts
-from pytubefix import YouTube
-from pytubefix.cli import on_progress
+import yt_dlp
+import subprocess
 import openai
 from google import genai
 from google.genai import types
@@ -47,23 +47,47 @@ class YouTubeProcessor:
             )
     
     def download_audio(self, url, session_id):
-        """Download audio from YouTube URL"""
+        """Download audio from YouTube URL using yt-dlp"""
         try:
             progress_data[session_id]['status'] = 'Downloading audio...'
             progress_data[session_id]['progress'] = 10
             
-            # Use WEB client with PoToken support to avoid bot detection
-            yt = YouTube(url, client='ANDROID', on_progress_callback=on_progress)
-            title = yt.title
+            # Configure yt-dlp options
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'extractaudio': True,
+                'audioformat': 'm4a',
+                'outtmpl': '%(title)s.%(ext)s',
+                'quiet': True,  # Suppress output
+                'no_warnings': True,
+            }
             
-            # Clean title for filename
-            safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            # Get video info first
+            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+                info = ydl.extract_info(url, download=False)
+                title = info.get('title', 'Unknown')
+                
+                # Clean title for filename
+                safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                
+                progress_data[session_id]['video_title'] = title
+                progress_data[session_id]['progress'] = 30
             
-            progress_data[session_id]['video_title'] = title
-            progress_data[session_id]['progress'] = 30
+            # Download audio with cleaned filename
+            ydl_opts['outtmpl'] = f'{safe_title}.%(ext)s'
             
-            ys = yt.streams.get_audio_only()
-            audio_file = ys.download(filename=f"{safe_title}.m4a")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            
+            # Find the downloaded file
+            audio_file = f"{safe_title}.m4a"
+            if not os.path.exists(audio_file):
+                # Try other common extensions
+                for ext in ['.webm', '.mp4', '.opus']:
+                    test_file = f"{safe_title}{ext}"
+                    if os.path.exists(test_file):
+                        audio_file = test_file
+                        break
             
             progress_data[session_id]['progress'] = 50
             progress_data[session_id]['audio_file'] = audio_file
