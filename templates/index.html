@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trakin Tech Closed Caption Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .input-group {
+            margin-bottom: 30px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="url"], select {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="url"]:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress-container {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .progress-bar {
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-fill {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 20px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .status-text {
+            color: #666;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .video-title {
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .download-section {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .download-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            margin: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: background 0.3s ease;
+        }
+
+        .download-btn:hover {
+            background: #218838;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .features {
+            margin-top: 30px;
+            text-align: left;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        .feature-icon {
+            color: #667eea;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+            
+            .logo {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🎥 Trakin Tech Closed Caption Generator</div>
+        
+        <form id="videoForm">
+            <div class="input-group">
+                <label for="channel">Select Channel:</label>
+                <select id="channel" name="channel" required>
+                    <option value="">Choose a channel...</option>
+                    <option value="trakin_tech">Trakin Tech</option>
+                    <option value="trakin_tech_marathi">Trakin Tech Marathi</option>
+                    <option value="trakin_tech_tamil">Trakin Tech Tamil</option>
+                </select>
+            </div>
+            
+            <div class="input-group">
+                <label for="videoUrl">YouTube Video URL:</label>
+                <input type="url" id="videoUrl" name="videoUrl" placeholder="https://www.youtube.com/watch?v=..." required>
+            </div>
+            
+            <button type="submit" class="btn" id="processBtn">
+                🚀 Process Video
+            </button>
+        </form>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="video-title" id="videoTitle"></div>
+            <div class="status-text" id="statusText">Starting...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div id="progressPercent">0%</div>
+        </div>
+
+        <div class="download-section" id="downloadSection">
+            <h3>✅ Processing Complete!</h3>
+            <p>Your files are ready for download:</p>
+            <div style="margin-top: 15px;">
+                <a href="#" class="download-btn" id="downloadSrt">📄 Download SRT File</a>
+                <a href="#" class="download-btn" id="downloadDescription">📝 Download Description</a>
+            </div>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+    </div>
+
+    <script>
+        let currentSessionId = null;
+        let progressInterval = null;
+
+        document.getElementById('videoForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const url = document.getElementById('videoUrl').value;
+            const channel = document.getElementById('channel').value;
+            const processBtn = document.getElementById('processBtn');
+            const progressContainer = document.getElementById('progressContainer');
+            const downloadSection = document.getElementById('downloadSection');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            // Reset UI
+            processBtn.disabled = true;
+            processBtn.textContent = '🔄 Processing...';
+            progressContainer.style.display = 'block';
+            downloadSection.style.display = 'none';
+            errorMessage.style.display = 'none';
+            
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: url, channel: channel })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                currentSessionId = data.session_id;
+                startProgressTracking();
+                
+            } catch (error) {
+                showError(error.message);
+                resetForm();
+            }
+        });
+
+        function startProgressTracking() {
+            progressInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/progress/${currentSessionId}`);
+                    const data = await response.json();
+                    
+                    updateProgress(data);
+                    
+                    if (data.progress === 100 || data.error) {
+                        clearInterval(progressInterval);
+                        
+                        if (data.error) {
+                            showError(data.error);
+                            resetForm();
+                        } else {
+                            showDownloadSection();
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error('Progress tracking error:', error);
+                }
+            }, 1000);
+        }
+
+        function updateProgress(data) {
+            const statusText = document.getElementById('statusText');
+            const progressFill = document.getElementById('progressFill');
+            const progressPercent = document.getElementById('progressPercent');
+            const videoTitle = document.getElementById('videoTitle');
+            
+            statusText.textContent = data.status || 'Processing...';
+            progressFill.style.width = `${data.progress || 0}%`;
+            progressPercent.textContent = `${data.progress || 0}%`;
+            
+            if (data.video_title) {
+                videoTitle.textContent = `📹 ${data.video_title}`;
+                videoTitle.style.display = 'block';
+            }
+        }
+
+        function showDownloadSection() {
+            const downloadSection = document.getElementById('downloadSection');
+            const downloadSrt = document.getElementById('downloadSrt');
+            const downloadDescription = document.getElementById('downloadDescription');
+            
+            downloadSrt.href = `/download/${currentSessionId}/srt`;
+            downloadDescription.href = `/download/${currentSessionId}/description`;
+            
+            downloadSection.style.display = 'block';
+            resetForm();
+        }
+
+        function showError(message) {
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = `❌ Error: ${message}`;
+            errorMessage.style.display = 'block';
+        }
+
+        function resetForm() {
+            const processBtn = document.getElementById('processBtn');
+            processBtn.disabled = false;
+            processBtn.textContent = '🚀 Process Video';
+        }
+    </script>
+</body>
+</html>
