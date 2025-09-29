@@ -15,6 +15,8 @@ from pytubefix.cli import on_progress
 import openai
 from google import genai
 from google.genai import types
+import requests
+import re
 
 app = Flask(__name__)
 
@@ -46,28 +48,112 @@ class YouTubeProcessor:
                 api_key=gemini_api_key,
             )
     
+    def download_audio_api(self, url, session_id):
+        """Download audio using YouTube to MP3 API as fallback"""
+        try:
+            progress_data[session_id]['status'] = 'Downloading via API...'
+            progress_data[session_id]['progress'] = 15
+            
+            # Extract video ID from URL
+            video_id = self.extract_video_id(url)
+            if not video_id:
+                raise Exception("Could not extract video ID from URL")
+            
+            # Use the API to get download link
+            api_url = f"https://api.vevioz.com/api/button/mp3/{video_id}"
+            
+            progress_data[session_id]['progress'] = 25
+            
+            # Make request to API
+            response = requests.get(api_url, timeout=30)
+            if response.status_code != 200:
+                raise Exception(f"API request failed with status {response.status_code}")
+            
+            # The API returns HTML with download links, we need to parse it
+            # Look for download links in the response
+            download_links = re.findall(r'href="([^"]*\.mp3[^"]*)"', response.text)
+            
+            if not download_links:
+                raise Exception("No download links found in API response")
+            
+            progress_data[session_id]['progress'] = 40
+            
+            # Use the first download link
+            download_url = download_links[0]
+            
+            # Get video title for filename
+            yt = YouTube(url)
+            title = yt.title
+            safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            
+            progress_data[session_id]['video_title'] = title
+            progress_data[session_id]['progress'] = 50
+            
+            # Download the audio file
+            audio_response = requests.get(download_url, timeout=60)
+            if audio_response.status_code != 200:
+                raise Exception(f"Audio download failed with status {audio_response.status_code}")
+            
+            # Save the file
+            audio_file = f"{safe_title}.mp3"
+            with open(audio_file, 'wb') as f:
+                f.write(audio_response.content)
+            
+            progress_data[session_id]['progress'] = 70
+            progress_data[session_id]['audio_file'] = audio_file
+            
+            return audio_file, safe_title
+            
+        except Exception as e:
+            progress_data[session_id]['error'] = f"API download error: {str(e)}"
+            raise e
+    
+    def extract_video_id(self, url):
+        """Extract YouTube video ID from URL"""
+        patterns = [
+            r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
+            r'(?:embed\/)([0-9A-Za-z_-]{11})',
+            r'(?:v\/)([0-9A-Za-z_-]{11})',
+            r'(?:youtu\.be\/)([0-9A-Za-z_-]{11})'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+        return None
+
     def download_audio(self, url, session_id):
-        """Download audio from YouTube URL"""
+        """Download audio from YouTube URL with fallback methods"""
         try:
             progress_data[session_id]['status'] = 'Downloading audio...'
             progress_data[session_id]['progress'] = 10
             
-            yt = YouTube(url, on_progress_callback=on_progress)
-            title = yt.title
-            
-            # Clean title for filename
-            safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            
-            progress_data[session_id]['video_title'] = title
-            progress_data[session_id]['progress'] = 30
-            
-            ys = yt.streams.get_audio_only()
-            audio_file = ys.download(filename=f"{safe_title}.m4a")
-            
-            progress_data[session_id]['progress'] = 50
-            progress_data[session_id]['audio_file'] = audio_file
-            
-            return audio_file, safe_title
+            # Try pytubefix first
+            try:
+                yt = YouTube(url, on_progress_callback=on_progress)
+                title = yt.title
+                
+                # Clean title for filename
+                safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                
+                progress_data[session_id]['video_title'] = title
+                progress_data[session_id]['progress'] = 30
+                
+                ys = yt.streams.get_audio_only()
+                audio_file = ys.download(filename=f"{safe_title}.m4a")
+                
+                progress_data[session_id]['progress'] = 50
+                progress_data[session_id]['audio_file'] = audio_file
+                
+                return audio_file, safe_title
+                
+            except Exception as pytubefix_error:
+                print(f"Pytubefix failed: {pytubefix_error}")
+                progress_data[session_id]['status'] = 'Trying alternative method...'
+                
+                # Fallback to API method
+                return self.download_audio_api(url, session_id)
             
         except Exception as e:
             progress_data[session_id]['error'] = f"Download error: {str(e)}"
