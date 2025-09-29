@@ -10,8 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import functions from existing scripts
-import yt_dlp
-import subprocess
+from pytubefix import YouTube
+from pytubefix.cli import on_progress
 import openai
 from google import genai
 from google.genai import types
@@ -47,178 +47,31 @@ class YouTubeProcessor:
             )
     
     def download_audio(self, url, session_id):
-        """Download audio from YouTube URL using multiple bypass strategies like online converters"""
+        """Download audio from YouTube URL"""
         try:
             progress_data[session_id]['status'] = 'Downloading audio...'
             progress_data[session_id]['progress'] = 10
             
-            # Base configuration
-            base_opts = {
-                'format': 'bestaudio/best',
-                'extractaudio': True,
-                'audioformat': 'm4a',
-                'outtmpl': '%(title)s.%(ext)s',
-                'quiet': True,
-                'no_warnings': True,
-                'socket_timeout': 30,
-                'retries': 3,
-            }
+            yt = YouTube(url, on_progress_callback=on_progress)
+            title = yt.title
             
-            # Strategy 1: Cookies method (if available)
-            youtube_cookies = os.getenv('YOUTUBE_COOKIES')
-            if youtube_cookies:
-                ydl_opts = base_opts.copy()
-                cookies_file = 'temp_cookies.txt'
-                with open(cookies_file, 'w') as f:
-                    f.write(youtube_cookies)
-                ydl_opts['cookiefile'] = cookies_file
-                
-                try:
-                    return self._attempt_download(url, ydl_opts, session_id, "cookies")
-                except Exception as e:
-                    print(f"Cookie method failed: {e}")
-                    if os.path.exists(cookies_file):
-                        os.remove(cookies_file)
-            
-            # Strategy 2: Android TV client (most reliable for bypassing restrictions)
-            ydl_opts = base_opts.copy()
-            ydl_opts.update({
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': ['android_creator', 'android_vr'],
-                        'player_skip': ['webpage', 'configs'],
-                        'skip': ['hls', 'dash'],
-                    }
-                },
-                'http_headers': {
-                    'User-Agent': 'com.google.android.apps.youtube.creator/22.30.100 (Linux; U; Android 11; SM-G973F Build/RP1A.200720.012) gzip',
-                    'X-YouTube-Client-Name': '14',
-                    'X-YouTube-Client-Version': '22.30.100',
-                }
-            })
-            
-            try:
-                return self._attempt_download(url, ydl_opts, session_id, "android_creator")
-            except Exception as e:
-                print(f"Android Creator client failed: {e}")
-            
-            # Strategy 3: Web client with embedded bypass
-            ydl_opts = base_opts.copy()
-            ydl_opts.update({
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': ['web_embedded'],
-                        'player_skip': ['webpage'],
-                    }
-                },
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Referer': 'https://www.youtube.com/',
-                    'Origin': 'https://www.youtube.com',
-                }
-            })
-            
-            try:
-                return self._attempt_download(url, ydl_opts, session_id, "web_embedded")
-            except Exception as e:
-                print(f"Web embedded client failed: {e}")
-            
-            # Strategy 4: Mobile web client
-            ydl_opts = base_opts.copy()
-            ydl_opts.update({
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': ['mweb'],
-                        'player_skip': ['configs'],
-                    }
-                },
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-                }
-            })
-            
-            try:
-                return self._attempt_download(url, ydl_opts, session_id, "mobile_web")
-            except Exception as e:
-                print(f"Mobile web client failed: {e}")
-            
-            # Strategy 5: iOS client with music fallback
-            ydl_opts = base_opts.copy()
-            ydl_opts.update({
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': ['ios_music', 'ios'],
-                        'player_skip': ['webpage', 'configs'],
-                    }
-                },
-                'http_headers': {
-                    'User-Agent': 'com.google.ios.youtubemusic/5.21 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
-                    'X-YouTube-Client-Name': '26',
-                    'X-YouTube-Client-Version': '5.21',
-                }
-            })
-            
-            try:
-                return self._attempt_download(url, ydl_opts, session_id, "ios_music")
-            except Exception as e:
-                print(f"iOS Music client failed: {e}")
-            
-            # Strategy 6: Last resort - basic Android client
-            ydl_opts = base_opts.copy()
-            ydl_opts.update({
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': ['android'],
-                    }
-                },
-                'http_headers': {
-                    'User-Agent': 'com.google.android.youtube/17.31.35 (Linux; U; Android 11) gzip'
-                }
-            })
-            
-            return self._attempt_download(url, ydl_opts, session_id, "android_basic")
-            
-        except Exception as e:
-            progress_data[session_id]['error'] = f"All download strategies failed: {str(e)}"
-            raise e
-    
-    def _attempt_download(self, url, ydl_opts, session_id, strategy_name):
-        """Helper method to attempt download with given options"""
-        print(f"Trying {strategy_name} strategy...")
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Extract info first
-            info = ydl.extract_info(url, download=False)
-            title = info.get('title', 'Unknown')
+            # Clean title for filename
             safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
             
             progress_data[session_id]['video_title'] = title
             progress_data[session_id]['progress'] = 30
-            progress_data[session_id]['strategy'] = strategy_name
             
-            # Update output template
-            ydl_opts['outtmpl'] = f'{safe_title}.%(ext)s'
-            
-            # Download the audio
-            ydl.download([url])
-            
-            # Find downloaded file
-            audio_file = f"{safe_title}.m4a"
-            if not os.path.exists(audio_file):
-                for ext in ['.webm', '.mp4', '.opus', '.aac']:
-                    test_file = f"{safe_title}{ext}"
-                    if os.path.exists(test_file):
-                        audio_file = test_file
-                        break
-            
-            if not os.path.exists(audio_file):
-                raise Exception(f"Downloaded file not found: {audio_file}")
+            ys = yt.streams.get_audio_only()
+            audio_file = ys.download(filename=f"{safe_title}.m4a")
             
             progress_data[session_id]['progress'] = 50
             progress_data[session_id]['audio_file'] = audio_file
             
-            print(f"Successfully downloaded using {strategy_name} strategy: {audio_file}")
             return audio_file, safe_title
+            
+        except Exception as e:
+            progress_data[session_id]['error'] = f"Download error: {str(e)}"
+            raise e
     
     def transcribe_audio(self, audio_file, safe_title, session_id):
         """Translate audio to English using OpenAI Whisper API"""
